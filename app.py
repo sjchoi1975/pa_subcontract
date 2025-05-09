@@ -97,13 +97,12 @@ def login():
         ]
         
         if len(user) == 0:
-            sample = users_df[['Email', '사업자등록번호', '제약사/CSO구분명']].head(10).to_dict()
-            return jsonify({'success': False, 'message': f'일치하는 데이터가 없습니다. 입력값: {email}, {business_number}\n샘플: {sample}'})
+            return jsonify({'success': False, 'message': '이메일, 사업자등록번호를 다시 확인해주세요.'})
         
         if user.iloc[0]['제약사/CSO구분명'] == '제약사':
             session['user_id'] = email
             return jsonify({'success': True})
-        return jsonify({'success': False, 'message': '로그인에 실패했습니다.'})
+        return jsonify({'success': False, 'message': '로그인 권한이 없습니다.'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
