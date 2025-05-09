@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>계약 관계 시각화</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+    <link href="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css?family=Nanum+Gothic&display=swap" rel="stylesheet">
+    <style>
+        .table th, .table td {
+            vertical-align: middle;
+            text-align: center;
+            height: 26px; /* 원하는 높이(px)로 조정 */
+            padding: 0rem 0.5rem;
+            font-size: 13px; /* 글자 크기 키움 */
+        }
+        .table thead th {
+            background: #333;
+            color: #fff;
+            border-bottom: 0.1rem solid #eee;
+        }
+        /* 사업자명, 사업장소재지만 왼쪽 정렬 */
+        .table .text-start {
+            text-align: left !important;
+        }
+        .table .text-end.re-padding {
+            text-align: right !important;
+            padding-right: 2.5rem !important;
+        }
+        /* 노드 상세 정보 패널 스타일 */
+        #slide-panel {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 320px;
+            height: 100%;
+            background: #fff;
+            box-shadow: -2px 0 4px rgba(0,0,0,0.1);
+            z-index: 9999;
+            transition: right 0.3s;
+            padding: 80px 20px;
+            overflow-y: auto;
+        }
+        #close-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            border: none;
+            background: transparent;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        #network {
+            width: 100%;
+            height: calc(100vh - 40px);
+            min-height: 800px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .table .thead-level-1 th { background: #333; color: #fff; }
+        .table .thead-level-2 th { background: #777; color: #fff; }
+        .table .thead-level-3 th { background: #aaa; color: #fff; }
+        .table .thead-level-4 th { background: #ccc; color: #222; }
+        .table [class^="thead-level-"]:not(.thead-level-1):not(.thead-level-2):not(.thead-level-3):not(.thead-level-4) th {
+            background: #eee;
+            color: #222;
+        }
+        #main-title.big-title {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-top: 16px;
+            margin-bottom: 48px;
+        }
+        #main-title.small-title {
+            font-size: 1.8rem;
+            margin-top: 8px;
+            margin-bottom: 4px;
+            text-align: left;
+            padding-left: 8px;
+        }
+        #title-row {
+            margin-bottom: 0.2rem !important;
+        }
+        #main-menu {
+            margin-bottom: 0.2rem !important;
+            background: #fff;
+            border-radius: 8px 8px 0 0;
+            padding-left: 8px;
+        }
+        #main-menu .nav-link {
+            font-family: 'Nanum Gothic', sans-serif;
+            font-size: 1.08rem;
+            color: #666;
+            font-weight: 500;
+            padding: 8px 22px 8px 22px;
+            border: none;
+            background: #fff;
+            transition: background 0.2s, color 0.2s;
+        }
+        #main-menu .nav-link.active {
+            color: #1976d2;
+            font-weight: 700;
+            background: #fff;
+            border-bottom: 2px solid #1976d2;
+            border-radius: 8px 8px 0 0;
+        }
+        #main-menu .nav-link:not(.active):hover {
+            background: #fff;
+            color: #1976d2;
+        }
+        #list-area {
+            display: flex;
+            min-height: 80vh;
+            align-items: center;
+            justify-content: center;
+        }
+        /* 로그인 화면용 제목 */
+        #main-title.login-title {
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 22px;
+            margin-top: 0;
+            text-align: center;
+            letter-spacing: 0.02em;
+        }
+        #loginForm {
+            max-width: 340px;
+            margin: 0 auto;
+        }
+        /* 로그인 후 */
+        #main-title-top.after-login {
+            font-family: 'Nanum Gothic', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin-top: 12px;
+            margin-bottom: 4px;
+        }
+        body.after-login {
+            font-family: 'Nanum Gothic', sans-serif;
+        }
+        .table {
+            width: 100%;
+            min-width: 900px;
+            max-width: 100%;
+            margin: 0;
+        }
+        #network-area {
+            background: #fff;  /* 원하는 색상으로 변경 */
+            border-radius: 8px;
+        }
+        #network {
+            background: #fff;  /* 네트워크 캔버스 자체 배경 */
+            border-radius: 8px;
+        }
+        #panel-content {
+            font-size: 16px;
+            color: #222;
+        }
+        #panel-content div {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div style="width:100vw; min-width:900px;">
+        <div class="container-fluid mt-2" style="max-width:100%; margin-left:40px; margin-right:40px;">
+            <!-- 상단 제목 (로그인 후만 보임) -->
+            <div class="row justify-content-center" id="title-row">
+                <div class="col-md-12 text-center mb-2">
+                    <h2 id="main-title-top" class="small-title" style="display:none; font-weight:bold;">재위탁 관계 분석 프로그램</h2>
+                </div>
+            </div>
+            <!-- 메뉴 -->
+            <ul class="nav nav-tabs mb-2" id="main-menu">
+                <li class="nav-item">
+                    <a class="nav-link active" id="tab-list" href="#">재위탁 목록</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="tab-network" href="#">재위탁 관계도</a>
+                </li>
+            </ul>
+            <!-- 로그인 박스 -->
+            <div id="list-area" style="display:flex; min-height: 80vh; align-items: center; justify-content: center;">
+                <div>
+                    <!-- 제목: 로그인 박스 바깥, 위에 위치 -->
+                    <h2 id="main-title" class="login-title">재위탁 관계 분석 프로그램</h2>
+                    <h2 id="main-title-top" class="small-title" style="display:none;">재위탁 관계 분석 프로그램</h2>
+                    <div id="loginForm" style="max-width:340px; margin:0 auto;">
+                        <div class="card">
+                            <div class="card-body">
+                                <form id="login">
+                                    <div class="mb-3">
+                                        <label for="email" class="form-label">이메일</label>
+                                        <input type="email" class="form-control" id="email" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="business_number" class="form-label">사업자등록번호</label>
+                                        <input type="text" class="form-control" id="business_number" required>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100">로그인</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="visualization" class="mt-4" style="display: none;">
+                    <div style="overflow-x:auto;">
+                        <div id="tree"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="network-area" style="display:none;">
+                <div id="network" style="width:100%; height:700px; background:#fff; border-radius:8px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 슬라이드 패널 HTML -->
+    <div id="slide-panel">
+        <button id="close-panel">×</button>
+        <div id="panel-content"></div>
+    </div>
+
+    <script>
+        window.currentSort = { key: '', asc: true };
+        window.lastTableData = null;
+
+        // 페이지가 처음 로드될 때 메뉴 숨기기
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('main-title').className = 'big-title';
+            document.getElementById('title-row').classList.add('justify-content-center');
+            document.getElementById('main-title').classList.remove('small-title');
+        });
+
+        document.getElementById('login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const business_number = document.getElementById('business_number').value;
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `email=${encodeURIComponent(email)}&business_number=${encodeURIComponent(business_number)}`
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                document.getElementById('main-menu').style.display = '';
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('visualization').style.display = 'block';
+                loadContractList();
+
+                // 상단 제목 보이기
+                document.getElementById('main-title-top').style.display = '';
+                document.getElementById('main-title-top').className = 'small-title after-login';
+                // 로그인 박스 안 제목 숨기기
+                document.getElementById('main-title').style.display = 'none';
+                document.body.classList.add('after-login');
+            } else {
+                alert(data.message);
+            }
+        });
+
+        async function loadContractList() {
+            const response = await fetch('/get_contract_list');
+            const data = await response.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            renderContractTable(data, '');
+        }
+
+        const columns = [
+            { key: '사업자명', label: '사업자명', class: 'text-start' },
+            { key: '사업자등록번호', label: '사업자등록번호' },
+            { key: '대표자명', label: '대표자명' },
+            { key: '사업장소재지', label: '사업장소재지', class: 'text-start' },
+            { key: 'CSO신고번호', label: 'CSO신고번호' },
+            { key: '재위탁업체', label: '재위탁업체', class: 'text-end re-padding' }
+        ];
+
+        function renderContractTable(data, parentNo = '') {
+            window.lastTableData = data;
+            const container = document.getElementById('tree');
+            container.innerHTML = '';
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p>수탁업체 정보가 없습니다.</p>';
+                return;
+            }
+
+            let html = '<table class="table table-bordered" style="width:100%; max-width:100%; min-width:900px;"><thead><tr>';
+            html += '<th>No</th>';
+            columns.forEach((col) => {
+                html += `<th style="cursor:pointer;" onclick="window.sortTable('${col.key}', 'main')">${col.label} <span id="sort-icon-main-${col.key}"></span></th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            data.forEach((row, idx) => {
+                const thisNo = (parentNo ? parentNo + '-' : '') + (idx + 1);
+                html += `<tr>
+                    <td>${thisNo}</td>`;
+                columns.forEach(col => {
+                    let tdClass = col.class ? col.class : '';
+                    let value = row[col.key] || '';
+                    if (col.key === '재위탁업체') {
+                        if (row['재위탁업체'] > 0) {
+                            value = `<span class="sub-link" style="color:#007bff; text-decoration:underline; cursor:pointer;" onclick="window.toggleSub(this, '${row['원본사업자등록번호']}', '${thisNo}')">${row['재위탁업체']}개</span> <span style="cursor:pointer; color:#007bff; font-size:16px; vertical-align:middle;" onclick="window.toggleSub(this.previousElementSibling, '${row['원본사업자등록번호']}', '${thisNo}')">&#9660;</span>`;
+                        } else {
+                            value = '0';
+                        }
+                    }
+                    html += `<td class="${tdClass || ''}">${value}</td>`;
+                });
+                html += `</tr>`;
+                if (row['재위탁업체'] > 0) {
+                    html += `<tr class="sub-row" style="display:none;"><td colspan="7"><div id="sub-table-${row['원본사업자등록번호']}">하위 재위탁업체 정보가 여기에 표시됩니다.</div></td></tr>`;
+                }
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        window.sortTable = function(key, tableId = 'main') {
+            if (!window.lastTableData) return;
+            if (!window.currentSort[tableId]) window.currentSort[tableId] = { key: '', asc: true };
+            if (window.currentSort[tableId].key === key) {
+                window.currentSort[tableId].asc = !window.currentSort[tableId].asc;
+            } else {
+                window.currentSort[tableId].key = key;
+                window.currentSort[tableId].asc = true;
+            }
+            // 정렬
+            const sorted = [...window.lastTableData].sort((a, b) => {
+                let v1 = a[key] || '';
+                let v2 = b[key] || '';
+                if (!isNaN(Number(v1)) && !isNaN(Number(v2))) {
+                    v1 = Number(v1);
+                    v2 = Number(v2);
+                }
+                if (v1 < v2) return window.currentSort[tableId].asc ? -1 : 1;
+                if (v1 > v2) return window.currentSort[tableId].asc ? 1 : -1;
+                return 0;
+            });
+            renderContractTable(sorted, '');
+            // 정렬 아이콘 표시
+            columns.forEach(col => {
+                const icon = document.getElementById('sort-icon-' + tableId + '-' + col.key);
+                if (icon) icon.innerHTML = '';
+            });
+            const icon = document.getElementById('sort-icon-' + tableId + '-' + key);
+            if (icon) icon.innerHTML = window.currentSort[tableId].asc ? '▲' : '▼';
+        };
+
+        window.toggleSub = async function(link, biznum, parentNo = '') {
+            const tr = link.closest('tr');
+            const next = tr.nextElementSibling;
+            if (next && next.classList.contains('sub-row')) {
+                if (next.style.display === 'none') {
+                    next.style.display = '';
+                    link.nextElementSibling.innerHTML = '&#9650;'; // 위 화살표
+
+                    const subContent = next.querySelector('div');
+                    subContent.innerHTML = '<span>로딩 중...</span>';
+                    try {
+                        const response = await fetch('/get_subcontract_list', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ parent_biznum: biznum })
+                        });
+                        const data = await response.json();
+                        if (!data || data.length === 0) {
+                            subContent.innerHTML = '<span>하위 재위탁업체가 없습니다.</span>';
+                        } else {
+                            renderSubTable(data, parentNo, `sub-table-${biznum}`);
+                        }
+                    } catch (e) {
+                        subContent.innerHTML = '<span>하위 정보 불러오기 실패</span>';
+                    }
+                } else {
+                    next.style.display = 'none';
+                    link.nextElementSibling.innerHTML = '&#9660;'; // 아래 화살표
+                }
+            }
+        };
+
+        function renderSubTable(data, parentNo, domId) {
+            if (!window.subSort) window.subSort = {};
+            if (!window.subLastData) window.subLastData = {};
+            window.subLastData[domId] = data;
+
+            // 단계 계산: parentNo의 '-' 개수 + 2 (1단계: 1, 2단계: 2, ...)
+            let level = 1;
+            if (parentNo) level = parentNo.split('-').length + 1;
+            let theadClass = 'thead-level-' + (level > 5 ? 5 : level);
+
+            let html = `<table class="table table-bordered table-sm" style="font-size:12px;"><thead class="${theadClass}"><tr>`;
+            html += '<th>No</th>';
+            columns.forEach((col) => {
+                html += `<th style="cursor:pointer;" onclick="window.sortSubTable('${col.key}', '${domId}', '${parentNo}')">${col.label} <span id="sort-icon-${domId}-${col.key}"></span></th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            data.forEach((row, idx) => {
+                const thisNo = (parentNo ? parentNo + '-' : '') + (idx + 1);
+                html += `<tr>
+                    <td>${thisNo}</td>`;
+                columns.forEach(col => {
+                    let tdClass = col.class ? col.class : '';
+                    let value = row[col.key] || '';
+                    if (col.key === '재위탁업체') {
+                        if (row['재위탁업체'] > 0) {
+                            value = `<span class="sub-link" style="color:#007bff; text-decoration:underline; cursor:pointer;" onclick="window.toggleSub(this, '${row['원본사업자등록번호']}', '${thisNo}')">${row['재위탁업체']}개</span> <span style="cursor:pointer; color:#007bff; font-size:16px; vertical-align:middle;" onclick="window.toggleSub(this.previousElementSibling, '${row['원본사업자등록번호']}', '${thisNo}')">&#9660;</span>`;
+                        } else {
+                            value = '0';
+                        }
+                    }
+                    html += `<td class="${tdClass || ''}">${value}</td>`;
+                });
+                html += `</tr>`;
+                if (row['재위탁업체'] > 0) {
+                    html += `<tr class="sub-row" style="display:none;"><td colspan="7"><div id="sub-table-${row['원본사업자등록번호']}">하위 재위탁업체 정보가 여기에 표시됩니다.</div></td></tr>`;
+                }
+            });
+
+            html += '</tbody></table>';
+            document.getElementById(domId).innerHTML = html;
+        };
+
+        window.sortSubTable = function(key, domId, parentNo) {
+            if (!window.subLastData || !window.subLastData[domId]) return;
+            if (!window.subSort) window.subSort = {};
+            if (!window.subSort[domId]) window.subSort[domId] = { key: '', asc: true };
+            if (window.subSort[domId].key === key) {
+                window.subSort[domId].asc = !window.subSort[domId].asc;
+            } else {
+                window.subSort[domId].key = key;
+                window.subSort[domId].asc = true;
+            }
+            // 정렬
+            const sorted = [...window.subLastData[domId]].sort((a, b) => {
+                let v1 = a[key] || '';
+                let v2 = b[key] || '';
+                if (!isNaN(Number(v1)) && !isNaN(Number(v2))) {
+                    v1 = Number(v1);
+                    v2 = Number(v2);
+                }
+                if (v1 < v2) return window.subSort[domId].asc ? -1 : 1;
+                if (v1 > v2) return window.subSort[domId].asc ? 1 : -1;
+                return 0;
+            });
+            renderSubTable(sorted, parentNo, domId);
+            // 정렬 아이콘 표시
+            columns.forEach(col => {
+                const icon = document.getElementById('sort-icon-' + domId + '-' + col.key);
+                if (icon) icon.innerHTML = '';
+            });
+            const icon = document.getElementById('sort-icon-' + domId + '-' + key);
+            if (icon) icon.innerHTML = window.subSort[domId].asc ? '▲' : '▼';
+        };
+
+        // 탭 전환
+        document.getElementById('tab-list').onclick = function(e) {
+            e.preventDefault();
+            document.getElementById('list-area').style.display = '';
+            document.getElementById('network-area').style.display = 'none';
+            this.classList.add('active');
+            document.getElementById('tab-network').classList.remove('active');
+            document.getElementById('slide-panel').style.right = '-300px';
+        };
+        
+        document.getElementById('tab-network').onclick = function(e) {
+            e.preventDefault();
+            document.getElementById('list-area').style.display = 'none';
+            document.getElementById('network-area').style.display = '';
+            this.classList.add('active');
+            document.getElementById('tab-list').classList.remove('active');
+            drawNetwork();
+            document.getElementById('slide-panel').style.right = '-300px';
+        };
+
+        // 패널 닫기 이벤트
+        document.getElementById('close-panel').onclick = function() {
+            document.getElementById('slide-panel').style.right = '-300px';
+        };
+
+        // 네트워크 그리기
+        let networkInstance = null;  // 네트워크 인스턴스 저장 변수
+
+        // 네트워크 생성 직후, 부모-자식 맵 생성
+        let parentMap = {}; // {자식ID: [부모ID, ...]}
+        let childMap = {};  // {부모ID: [자식ID, ...]}
+
+        let data = null; // 전역 변수로 선언
+
+        function buildRelationMaps() {
+            parentMap = {};
+            childMap = {};
+            if (!data) return; // data가 없으면 실행하지 않음
+            data.edges.get().forEach(e => {
+                if (!childMap[e.from]) childMap[e.from] = [];
+                childMap[e.from].push(e.to);
+
+                if (!parentMap[e.to]) parentMap[e.to] = [];
+                parentMap[e.to].push(e.from);
+            });
+        }
+
+        async function drawNetwork() {
+            try {
+                const container = document.getElementById('network');
+                container.innerHTML = '<div style="text-align:center;padding-top:50px;">네트워크 데이터 로딩 중...</div>';
+                
+                // 서버에서 데이터 가져오기
+                const response = await fetch('/get_network_data');
+                if (!response.ok) {
+                    throw new Error('Network data fetch failed');
+                }
+                
+                const networkData = await response.json();
+                if (networkData.error) {
+                    container.innerHTML = `<div style="text-align:center;padding-top:50px;color:red;">오류: ${networkData.error}</div>`;
+                    return;
+                }
+                
+                // 데이터 구조 확인 및 디버깅
+                console.log('Network data loaded:', networkData);
+                
+                const { nodes, edges, node_info, children } = networkData;
+                
+                if (!nodes || !edges || nodes.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding-top:50px;">표시할 네트워크 데이터가 없습니다.</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';  // 로딩 메시지 제거
+                
+                // vis.js 데이터셋 생성
+                data = {
+                    nodes: new vis.DataSet(nodes),
+                    edges: new vis.DataSet(edges)
+                };
+                
+                // 네트워크 옵션 설정
+                const options = {
+                    physics: {
+                        enabled: false,
+                        barnesHut: {
+                            gravitationalConstant: -20000,
+                            centralGravity: 1.5,
+                            springLength: 100,
+                            springConstant: 0.5,
+                            damping: 0.3,
+                            avoidOverlap: 8.0
+                        }
+                    },
+                    nodes: {
+                        shape: 'circle',
+                        borderWidth: 1,
+                        borderWidthSelected: 2,
+                        margin: 2,
+                        font: {
+                            size: 20,
+                            multi: true
+                        }
+                    },
+                    edges: {
+                        arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                        color: { color: '#848484', highlight: '#1469C8' },
+                        width: 1.2,
+                        smooth: { type: 'dynamic', forceDirection: 'none' }
+                    },
+                    layout: { improvedLayout: false },
+                    interaction: {
+                        hover: true,
+                        tooltipDelay: 200,
+                        dragNodes: true,
+                        dragView: true
+                    }
+                };
+                
+                // 이전 네트워크 인스턴스가 있으면 파괴
+                if (networkInstance) {
+                    networkInstance.destroy();
+                }
+                
+                // 네트워크 생성
+                networkInstance = new vis.Network(container, data, options);
+                networkInstance.fit();
+                
+                // 1.5초 후 physics 끄기 (고정)
+                setTimeout(() => {
+                    networkInstance.setOptions({ physics: { enabled: false } });
+                }, 1500);
+                
+                // 노드 클릭 이벤트 핸들러
+                let nodeClickState = {};
+                let expandedNodes = {};
+                let lastSelectedNodeId = null;
+
+                networkInstance.on('click', function(params) {
+                    if (params.nodes.length > 0) {
+                        const nodeId = params.nodes[0];
+
+                        // 새로운 노드를 클릭하면 항상 0(상세정보)부터 시작
+                        if (lastSelectedNodeId !== nodeId) {
+                            nodeClickState[nodeId] = 0;
+                            lastSelectedNodeId = nodeId;
+                        }
+                        if (!(nodeId in nodeClickState)) nodeClickState[nodeId] = 0;
+
+                        if (nodeClickState[nodeId] === 0) {
+                            showNodeDetail(nodeId, 1); // 상세 정보만
+                            // 다음 클릭은 펼쳐진 상태면 2(닫기), 아니면 1(펼치기)
+                            nodeClickState[nodeId] = expandedNodes[nodeId] ? 2 : 1;
+                        } else if (nodeClickState[nodeId] === 1) {
+                            expandChildren(nodeId); // 자식 노드 펼치기
+                            expandedNodes[nodeId] = true;
+                            nodeClickState[nodeId] = 2;
+                        } else if (nodeClickState[nodeId] === 2) {
+                            closeChildren(nodeId); // 자식 노드 닫기
+                            expandedNodes[nodeId] = false;
+                            nodeClickState[nodeId] = 1;
+                        }
+                    }
+                });
+                
+                // 노드 상세 정보 표시 함수
+                window.showNodeDetail = function(nodeId, level = 1) {
+                    const info = node_info[nodeId];
+                    if (!info) {
+                        console.error('Node info not found for nodeId:', nodeId);
+                        return;
+                    }
+                    let html = `<div style="font-weight:bold;font-size:18px;margin-bottom:12px;">${info['사업자명']}</div>`;
+                    html += `<div style='font-weight:bold;'>사업자등록번호</div><div style='margin-bottom:8px;'>${info['사업자등록번호']}</div>`;
+                    html += `<div style='font-weight:bold;'>대표자</div><div style='margin-bottom:8px;'>${info['대표자명']}</div>`;
+                    html += `<div style='font-weight:bold;'>사업장소재지</div><div style='margin-bottom:8px;'>${info['사업장소재지']}</div>`;
+                    html += `<div style='font-weight:bold;'>CSO신고번호</div><div style='margin-bottom:8px;'>${info['CSO신고번호']}</div>`;
+                    html += `<div style='font-weight:bold;'>재위탁업체</div><div style='margin-bottom:8px;'>${info['재위탁업체']}</div>`;
+                    document.getElementById('panel-content').innerHTML = html;
+                    document.getElementById('slide-panel').style.right = '0';
+                };
+                
+                // 네트워크 생성 직후
+                buildRelationMaps();
+
+                networkInstance.on('dragEnd', function(params) {
+                    if (params.nodes.length === 0) return;
+                    const movedNodeId = params.nodes[0];
+                    const movedNodePos = networkInstance.getPositions([movedNodeId])[movedNodeId];
+
+                    const children = childMap[movedNodeId] || [];
+                    children.forEach(childId => {
+                        const parentIds = parentMap[childId] || [];
+                        let avgX = 0, avgY = 0;
+                        parentIds.forEach(pid => {
+                            const pos = networkInstance.getPositions([pid])[pid];
+                            avgX += pos.x;
+                            avgY += pos.y;
+                        });
+                        avgX /= parentIds.length;
+                        avgY /= parentIds.length;
+                        networkInstance.moveNode(childId, avgX, avgY);
+                    });
+                });
+                
+                // 노드/엣지 추가·삭제 후
+                buildRelationMaps();
+                
+            } catch (error) {
+                console.error('Error in drawNetwork:', error);
+                const container = document.getElementById('network');
+                container.innerHTML = `<div style="text-align:center;padding-top:50px;color:red;">네트워크 로딩 중 오류가 발생했습니다: ${error.message}</div>`;
+            }
+        }
+
+        async function expandChildren(nodeId) {
+            if (window.expandedNodes && window.expandedNodes[nodeId]) return;
+            if (!window.expandedNodes) window.expandedNodes = {};
+            window.expandedNodes[nodeId] = true;
+
+            // 네트워크에서 실제 위치 가져오기
+            const pos = networkInstance.getPositions([nodeId])[nodeId];
+            const response = await fetch('/get_subnetwork_data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    parent_biznum: nodeId,
+                    parent_x: pos.x,
+                    parent_y: pos.y
+                })
+            });
+            const result = await response.json();
+            if (result.nodes && result.edges) {
+                // 노드 추가
+                data.nodes.add(result.nodes.filter(n => !data.nodes.get(n.id)));
+                // 엣지 추가 (id 기준 중복 체크)
+                result.edges.forEach(e => {
+                    const edgeId = e.id || (e.from + '_' + e.to);
+                    if (!data.edges.get(edgeId)) {
+                        data.edges.add({...e, id: edgeId});
+                    }
+                });
+            }
+        }
+
+        function closeChildren(nodeId) {
+            if (!window.expandedNodes || !window.expandedNodes[nodeId]) return;
+            window.expandedNodes[nodeId] = false;
+
+            // 현재 네트워크에서 부모가 nodeId인 엣지의 to(자식) 노드만 삭제
+            const childEdges = data.edges.get().filter(e => e.from === nodeId);
+            const childIds = childEdges.map(e => e.to);
+
+            // 자식 노드와 그 노드와 연결된 모든 엣지 삭제
+            data.nodes.remove(childIds);
+            // (엣지는 노드 삭제 시 자동 삭제됨)
+        }
+    </script>
+</body>
+</html>
